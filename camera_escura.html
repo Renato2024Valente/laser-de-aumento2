@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Câmara Escura — Animação Interativa</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#111a2b; --muted:#9fb0c8; --text:#eef4ff;
+    --accent:#66a3ff; --accent2:#4de3c4; --wall:#0e1629;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:radial-gradient(1200px 800px at 10% -10%, #1a2440 0%, transparent 60%) no-repeat,
+                         radial-gradient(1200px 800px at 110% 10%, #11223a 0%, transparent 60%) no-repeat,
+                         var(--bg);
+    color:var(--text); font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial;
+  }
+  header{
+    position:sticky; top:0; padding:14px 18px; background:rgba(8,12,24,.75); backdrop-filter:blur(10px);
+    border-bottom:1px solid rgba(255,255,255,.08); z-index:5;
+  }
+  h1{margin:0; font-size:clamp(18px,3vw,28px)}
+  .muted{color:var(--muted)}
+  .wrap{max-width:1200px; margin:18px auto; padding:0 18px}
+  .grid{display:grid; grid-template-columns:320px 1fr; gap:12px}
+  @media (max-width:900px){ .grid{grid-template-columns:1fr} }
+  .controls{
+    background:rgba(18,26,42,.8); border:1px solid rgba(255,255,255,.06); border-radius:16px; padding:14px;
+  }
+  .controls h3{margin:.2rem 0 .6rem 0}
+  .ctrl{margin:10px 0}
+  .ctrl label{display:flex; justify-content:space-between; gap:10px}
+  input[type="range"]{width:100%}
+  .row{display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+  .pill{display:inline-block; border:1px solid rgba(255,255,255,.12); border-radius:999px; padding:4px 10px}
+  .eq{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      background:rgba(255,255,255,.06); padding:2px 6px; border-radius:8px}
+  .canvasWrap{position:relative; background:var(--wall); border:1px solid rgba(255,255,255,.06);
+              border-radius:16px; overflow:hidden}
+  canvas{display:block; width:100%; height:560px; background:#0c1426}
+  .legend{padding:10px 14px; color:var(--muted); font-size:14px; background:#0c1426}
+  footer{color:var(--muted); text-align:center; padding:16px}
+</style>
+</head>
+<body>
+  <header>
+    <h1>Câmara Escura <span class="muted">— projeção invertida, abertura e brilho</span></h1>
+  </header>
+
+  <div class="wrap">
+    <div class="grid">
+      <div class="controls">
+        <h3>Controles</h3>
+        <div class="ctrl">
+          <label>Distância do objeto ao orifício <span><span id="do_val">2.0</span> m</span></label>
+          <input type="range" id="do" min="0.5" max="6" step="0.1" value="2.0">
+        </div>
+        <div class="ctrl">
+          <label>Distância do anteparo (tela) <span><span id="di_val">0.6</span> m</span></label>
+          <input type="range" id="di" min="0.2" max="2.0" step="0.05" value="0.6">
+        </div>
+        <div class="ctrl">
+          <label>Diâmetro do orifício (abertura) <span><span id="D_val">2.0</span> mm</span></label>
+          <input type="range" id="D" min="0.2" max="10.0" step="0.1" value="2.0">
+        </div>
+        <div class="ctrl">
+          <label>Altura do objeto <span><span id="ho_val">20</span> cm</span></label>
+          <input type="range" id="ho" min="5" max="60" step="1" value="20">
+        </div>
+        <div class="ctrl">
+          <label><input type="checkbox" id="anim"> Animar objeto</label>
+        </div>
+        <div class="ctrl muted">
+          <div class="row">
+            <span class="pill">Ampliação ideal (pinhole): <b id="M_val">-0.30×</b></span>
+            <span class="pill">Imagem (|hᵢ|): <b id="hi_val">6.0 cm</b></span>
+            <span class="pill">Blur aprox.: <b id="blur_val">0.6 cm</b></span>
+          </div>
+          <div style="margin-top:6px">
+            <span class="eq">M ≈ -d<sub>i</sub>/d<sub>o</sub></span> &nbsp;|&nbsp;
+            <span class="eq">h<sub>i</sub> = M · h<sub>o</sub></span> &nbsp;|&nbsp;
+            <span class="eq">blur ≈ D · d<sub>i</sub>/d<sub>o</sub></span> (aprox. didática)
+          </div>
+          <div style="margin-top:6px">
+            Brilho relativo ∝ área da abertura <span class="eq">∝ D²</span> (neste modelo).
+          </div>
+        </div>
+      </div>
+
+      <div class="canvasWrap">
+        <canvas id="cv" width="1100" height="560"></canvas>
+        <div class="legend">
+          <b>Esquerda</b>: cena externa (objeto). &nbsp; <b>Centro</b>: parede fina com orifício (abertura). &nbsp;
+          <b>Direita</b>: câmara com anteparo (imagem invertida). Linhas mostram raios do topo/base.
+        </div>
+      </div>
+    </div>
+
+    <section class="legend" style="margin-top:14px">
+      <b>Como ler a simulação</b><br>
+      • Diminuir o orifício deixa a imagem mais <u>nítida</u> (menos blur), porém <u>mais escura</u>.<br>
+      • A imagem é <u>invertida</u> (cima↔baixo). A ampliação depende da razão entre distâncias (|M| = dᵢ/dₒ).<br>
+      • O “blur” (círculo de confusão) cresce com D e com dᵢ/dₒ (modelo didático).<br>
+      • Mova o objeto (animar) e veja a imagem caminhar no anteparo.
+    </section>
+
+    <footer>Segurança: se usar laser/lanterna em aula, aponte para superfície fosca e evite olhos/espelhos. — © 2025</footer>
+  </div>
+
+<script>
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+
+// Inputs
+const doIn = document.getElementById('do');
+const diIn = document.getElementById('di');
+const DIn  = document.getElementById('D');
+const hoIn = document.getElementById('ho');
+const anim = document.getElementById('anim');
+
+// Labels
+const doVal = document.getElementById('do_val');
+const diVal = document.getElementById('di_val');
+const DVal  = document.getElementById('D_val');
+const hoVal = document.getElementById('ho_val');
+const MVal  = document.getElementById('M_val');
+const hiVal = document.getElementById('hi_val');
+const blurVal = document.getElementById('blur_val');
+
+// World-to-canvas layout
+const leftMargin = 60;
+const rightMargin = 40;
+const H = cv.height, W = cv.width;
+
+// Scene layout: object on the far left, aperture wall at x=xa, screen at x=xs
+const xa = W*0.46;   // aperture wall x
+const xs = W*0.84;   // screen x
+
+// Vertical scaling
+const meterToPxY = H * 0.35;
+
+let t = 0;
+
+function draw(){
+  const do_m = parseFloat(doIn.value);
+  const di_m = parseFloat(diIn.value);
+  const D_mm = parseFloat(DIn.value);
+  const ho_cm= parseFloat(hoIn.value);
+
+  if(anim.checked){ t += 0.02; }
+
+  doVal.textContent = do_m.toFixed(1);
+  diVal.textContent = di_m.toFixed(2);
+  DVal.textContent  = D_mm.toFixed(1);
+  hoVal.textContent = ho_cm.toFixed(0);
+
+  const ho_m = ho_cm / 100.0;
+  const M = - di_m / do_m;
+  const hi_m = M * ho_m;
+  const blur_m = (D_mm/1000) * (di_m / do_m);
+
+  MVal.textContent = M.toFixed(2) + '×';
+  hiVal.textContent = Math.abs(hi_m*100).toFixed(1) + ' cm';
+  blurVal.textContent = (blur_m*100).toFixed(1) + ' cm';
+
+  const xObj = xa - (do_m / (doIn.max - doIn.min)) * (xa - leftMargin) * 0.95;
+  const xWall = xa;
+  const xScreen = xs;
+
+  ctx.clearRect(0,0,W,H);
+
+  const bg = ctx.createLinearGradient(0,0,W,0);
+  bg.addColorStop(0, '#0f1a2f');
+  bg.addColorStop(1, '#0b1326');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,W,H);
+
+  ctx.strokeStyle = '#1f2a40';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, H*0.8); ctx.lineTo(W, H*0.8); ctx.stroke();
+
+  const objBaseY = H*0.8;
+  const objH = ho_m * meterToPxY;
+  const objTopY = objBaseY - objH + Math.sin(t*1.3)* (anim.checked? 4:0);
+
+  ctx.fillStyle = '#ffd166';
+  const flameY = objTopY - 18 - Math.sin(t*6)*(anim.checked? 2:1);
+  ctx.beginPath(); ctx.ellipse(xObj, flameY, 8, 14, 0, 0, Math.PI*2); ctx.fill();
+
+  ctx.fillStyle = '#f7f7ff';
+  ctx.fillRect(xObj-6, objTopY, 12, objBaseY-objTopY);
+
+  ctx.fillStyle = '#cde9ff';
+  ctx.font = '12px ui-monospace';
+  ctx.fillText('Topo', xObj-18, objTopY-6);
+  ctx.fillText('Base', xObj-18, objBaseY+14);
+
+  ctx.fillStyle = '#0e1a33';
+  ctx.fillRect(xWall-6, H*0.12, 12, H*0.68);
+  ctx.strokeStyle = '#3b82f6';
+  ctx.lineWidth = 2;
+
+  const yHole = H*0.46 + Math.sin(t*0.6)*(anim.checked? 1:0);
+  const D_px = (D_mm/1000) * meterToPxY;
+  ctx.beginPath(); ctx.ellipse(xWall, yHole, D_px/2, D_px/2, 0, 0, Math.PI*2); ctx.stroke();
+
+  ctx.strokeStyle = '#64748b';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(xWall+6, H*0.12, (xScreen - (xWall+6)), H*0.68);
+
+  ctx.fillStyle = '#0b1220';
+  ctx.fillRect(xScreen-6, H*0.12, 12, H*0.68);
+
+  function line(x1,y1,x2,y2, color, w=1.4, dash=false){
+    ctx.save();
+    ctx.strokeStyle = color; ctx.lineWidth = w;
+    if(dash) ctx.setLineDash([6,6]); else ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    ctx.restore();
+  }
+
+  const imgH_px = Math.abs(hi_m) * meterToPxY;
+  const yImgTop = yHole + (hi_m>0 ? imgH_px : -imgH_px);
+
+  line(xObj, objTopY, xWall, yHole, '#4de3c4', 1.6);
+  line(xWall, yHole, xScreen, yImgTop, '#4de3c4', 1.6);
+
+  line(xObj, objBaseY, xWall, yHole, '#66a3ff', 1.6);
+  line(xWall, yHole, xScreen, yHole + (hi_m>0 ? 0 : 0) + (hi_m>0 ? -imgH_px : imgH_px), '#66a3ff', 1.6);
+
+  const imgCenterY = yHole + (hi_m<0 ? imgH_px/2 : -imgH_px/2);
+  const imgTop = yHole + (hi_m<0 ? -imgH_px : imgH_px);
+  const imgBottom = yHole;
+
+  const blur_px = blur_m * meterToPxY;
+
+  const D_norm = (D_mm - 0.2) / (10 - 0.2);
+  const bright = Math.max(0.08, Math.min(1.0, 0.15 + D_norm*0.85));
+
+  const y1 = Math.min(yHole, yHole + (hi_m<0 ? imgH_px : -imgH_px));
+  const y2 = Math.max(yHole, yHole + (hi_m<0 ? imgH_px : -imgH_px));
+  const gradImg = ctx.createLinearGradient(0,y1,0,y2);
+  const col = `rgba(255, 230, 150, ${0.65*bright})`;
+  gradImg.addColorStop(0, col);
+  gradImg.addColorStop(1, col);
+
+  ctx.fillStyle = gradImg;
+  ctx.fillRect(xScreen-6, y1, 12, (y2-y1));
+
+  ctx.fillStyle = `rgba(255, 230, 150, ${0.12*bright})`;
+  for(let k=1; k<=6; k++){
+    const off = (k/6) * blur_px;
+    ctx.fillRect(xScreen-6 - off, y1 - off, 12 + 2*off, (y2 - y1) + 2*off);
+  }
+
+  ctx.fillStyle = '#cfe6ff'; ctx.font = '12px ui-monospace';
+  ctx.fillText('Cena externa', xObj-38, H*0.12-8);
+  ctx.fillText('Parede com orifício', xWall-58, H*0.12-8);
+  ctx.fillText('Câmara + anteparo', xScreen-68, H*0.12-8);
+
+  ctx.strokeStyle = '#94a3b8'; ctx.setLineDash([6,6]);
+  ctx.beginPath(); ctx.moveTo(xObj, H*0.86); ctx.lineTo(xWall, H*0.86); ctx.stroke();
+  ctx.setLineDash([]); ctx.fillStyle = '#cbd5e1'; ctx.fillText('dₒ', (xObj+xWall)/2, H*0.86-6);
+
+  ctx.setLineDash([6,6]);
+  ctx.beginPath(); ctx.moveTo(xWall, H*0.88); ctx.lineTo(xScreen, H*0.88); ctx.stroke();
+  ctx.setLineDash([]); ctx.fillText('dᵢ', (xWall+xScreen)/2, H*0.88-6);
+}
+
+function loop(){
+  if(anim.checked) draw();
+  requestAnimationFrame(loop);
+}
+[doIn, diIn, DIn, hoIn].forEach(el => el.addEventListener('input', draw));
+anim.addEventListener('change', draw);
+draw(); loop();
+</script>
+</body>
+</html>

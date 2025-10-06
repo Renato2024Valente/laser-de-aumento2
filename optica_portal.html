@@ -1,0 +1,52 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portal Óptica — Reflexão, Refração, Difração, Difusão</title>
+<style>
+  :root{--bg:#0b1220;--card:#0f1830;--muted:#a8b3c7;--text:#eef4ff;--accent:#66a3ff;--accent2:#4de3c4}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto}
+  header{padding:18px 20px;background:#0e1526;border-bottom:1px solid #1e293b}
+  h1{margin:0;font-size:clamp(20px,3.5vw,30px)} .muted{color:var(--muted)}
+  .wrap{max-width:1100px;margin:18px auto;padding:0 16px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+  .card{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));border:1px solid #1f2a44;
+        border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px}
+  a.btn{display:inline-block;text-decoration:none;color:#001026;background:linear-gradient(135deg,var(--accent),#2a77ff);
+        padding:10px 12px;border-radius:12px;font-weight:800}
+  .pill{display:inline-block;border:1px solid #2c3a57;border-radius:999px;padding:4px 10px;color:var(--muted);margin-right:6px}
+</style>
+</head>
+<body>
+<header><h1>Portal de Animações de Óptica <span class="muted">— HTML/JS puro</span></h1></header>
+<div class="wrap">
+  <div class="grid">
+    <div class="card">
+      <div><b>Reflexão</b> — lei θᵢ=θᵣ e efeito da rugosidade (difusa)</div>
+      <div><span class="pill">Espelho plano</span><span class="pill">Ângulos</span></div>
+      <a class="btn" href="reflexao_animacao.html" target="_blank">Abrir Reflexão</a>
+    </div>
+    <div class="card">
+      <div><b>Refração</b> — Snell, desvio e Reflexão Interna Total</div>
+      <div><span class="pill">n₁/n₂</span><span class="pill">θc</span></div>
+      <a class="btn" href="refracao_snell_animacao.html" target="_blank">Abrir Refração</a>
+    </div>
+    <div class="card">
+      <div><b>Difração</b> — fenda única e dupla fenda</div>
+      <div><span class="pill">Envelope sinc²</span><span class="pill">Franjas cos²</span></div>
+      <a class="btn" href="difracao_animacao.html" target="_blank">Abrir Difração</a>
+    </div>
+    <div class="card">
+      <div><b>Difusão</b> — reflexão difusa (Lambert)</div>
+      <div><span class="pill">Rugosidade</span><span class="pill">Lóbulo cosθ</span></div>
+      <a class="btn" href="difusao_animacao.html" target="_blank">Abrir Difusão</a>
+    </div>
+    <div class="card">
+      <div><b>Bônus</b> — Câmara Escura & Laser (se já tiver baixado)</div>
+      <div><span class="pill">Pinhole</span><span class="pill">Projeção/Difração</span></div>
+      <a class="btn" href="camera_escura_animacao.html" target="_blank">Abrir Câmara Escura</a>
+    </div>
+  </div>
+</div>
+</body></html>

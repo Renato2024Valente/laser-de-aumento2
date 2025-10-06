@@ -1,0 +1,109 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Difração — Fenda Única e Dupla Fenda</title>
+<style>
+  :root{--bg:#0b1220;--muted:#a8b3c7;--text:#eef4ff}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto}
+  header{position:sticky;top:0;padding:14px 18px;background:#0e1526;border-bottom:1px solid #1e293b}
+  h1{margin:0;font-size:clamp(18px,3vw,26px)} .muted{color:var(--muted)}
+  .wrap{max-width:1100px;margin:16px auto;padding:0 16px}
+  .grid{display:grid;grid-template-columns:300px 1fr;gap:12px} @media(max-width:900px){.grid{grid-template-columns:1fr}}
+  .controls{background:#0e1930;border:1px solid #1f2a44;border-radius:14px;padding:12px}
+  .ctrl{margin:10px 0} .ctrl label{display:flex;justify-content:space-between;gap:10px}
+  input[type=range]{width:100%} .legend{color:var(--muted);font-size:13px;margin-top:8px}
+  canvas{width:100%;height:520px;background:#0b1326;border:1px solid #1f2a44;border-radius:14px}
+  .pill{display:inline-block;border:1px solid #2c3a57;border-radius:999px;padding:4px 10px;margin-right:6px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header><h1>Difração <span class="muted">— padrão na tela (I)</span></h1></header>
+<div class="wrap">
+  <div class="grid">
+    <div class="controls">
+      <div class="ctrl"><label>Modo <span id="modo_v">Fenda Única</span></label>
+        <select id="modo">
+          <option value="single">Fenda Única</option>
+          <option value="double">Dupla Fenda</option>
+        </select>
+      </div>
+      <div class="ctrl"><label>Distância L (m) <span id="L_v">2.0</span></label>
+        <input id="L" type="range" min="0.5" max="8" step="0.1" value="2"></div>
+      <div class="ctrl"><label>λ (nm) <span id="lam_v">650</span></label>
+        <input id="lam" type="range" min="405" max="700" step="1" value="650"></div>
+      <div class="ctrl"><label>Largura a (µm) <span id="a_v">100</span></label>
+        <input id="a" type="range" min="10" max="1000" step="5" value="100"></div>
+      <div class="ctrl" id="d_wrap"><label>Separação d (µm) <span id="d_v">300</span></label>
+        <input id="d" type="range" min="20" max="3000" step="5" value="300"></div>
+      <div class="legend">
+        • Fenda única: envelope <i>sinc²</i> (I ∝ (senβ/β)²).<br>
+        • Dupla fenda: franjas por interferência (fator cos²) <b>moduladas</b> pelo envelope da fenda.
+      </div>
+    </div>
+    <canvas id="cv" width="1000" height="520"></canvas>
+  </div>
+</div>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const modo=document.getElementById('modo'), L=document.getElementById('L'), lam=document.getElementById('lam'),
+      a=document.getElementById('a'), d=document.getElementById('d'),
+      L_v=document.getElementById('L_v'), lam_v=document.getElementById('lam_v'), a_v=document.getElementById('a_v'), d_v=document.getElementById('d_v'),
+      d_wrap=document.getElementById('d_wrap'), modo_v=document.getElementById('modo_v');
+
+function draw(){
+  const W=cv.width,H=cv.height, half=H/2;
+  const Lm=parseFloat(L.value); L_v.textContent=Lm.toFixed(1);
+  const lam_m=parseFloat(lam.value)*1e-9; lam_v.textContent=lam.value;
+  const a_m=parseFloat(a.value)*1e-6; a_v.textContent=a.value;
+  const d_m=parseFloat(d.value)*1e-6; d_v.textContent=d.value;
+  modo_v.textContent = (modo.value==='single' ? 'Fenda Única' : 'Dupla Fenda');
+  d_wrap.style.display = (modo.value==='double'?'block':'none');
+
+  ctx.clearRect(0,0,W,H);
+  const bg=ctx.createLinearGradient(0,0,0,H); bg.addColorStop(0,'#0f1a2f'); bg.addColorStop(1,'#0b1326'); ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+
+  // escala vertical para y (m/px) cobrindo alguns mínimos
+  const y1 = lam_m*Lm/a_m;
+  const Ymax = 3.5*y1; const m_per_px=(2*Ymax)/H;
+
+  const img = ctx.createImageData(W,H); const data=img.data;
+  for(let x=0;x<W;x++){
+    for(let y=0;y<H;y++){
+      const y_m=(y-half)*m_per_px;
+      const theta=Math.atan2(y_m,Lm);
+      const beta=Math.PI*a_m*Math.sin(theta)/lam_m;
+      let I_env = (Math.abs(beta)<1e-6)?1: Math.pow(Math.sin(beta)/beta,2);
+      let I = I_env;
+      if(modo.value==='double'){
+        const delta = Math.PI*d_m*Math.sin(theta)/lam_m;
+        const inter = Math.pow(Math.cos(delta),2);
+        I = inter*I_env;
+      }
+      // contraste
+      const v = Math.pow(Math.max(0,Math.min(1,I)), 0.65);
+      const g = Math.round(v*255);
+      const idx=(y*W+x)*4; data[idx]=g; data[idx+1]=g; data[idx+2]=g; data[idx+3]=255;
+    }
+  }
+  ctx.putImageData(img,0,0);
+  // Curva I(y)
+  ctx.strokeStyle='#4de3c4'; ctx.lineWidth=2; ctx.beginPath();
+  for(let y=0;y<H;y+=2){
+    const y_m=(y-half)*m_per_px; const theta=Math.atan2(y_m,Lm);
+    const beta=Math.PI*a_m*Math.sin(theta)/lam_m;
+    let I_env = (Math.abs(beta)<1e-6)?1: Math.pow(Math.sin(beta)/beta,2);
+    let I=I_env;
+    if(modo.value==='double'){
+      const delta = Math.PI*d_m*Math.sin(theta)/lam_m;
+      I *= Math.pow(Math.cos(delta),2);
+    }
+    const xPlot = 60 + 200*I;
+    if(y===0) ctx.moveTo(xPlot,y); else ctx.lineTo(xPlot,y);
+  }
+  ctx.stroke();
+}
+[modo,L,lam,a,d].forEach(e=>e.addEventListener('input', draw)); draw();
+</script>
+</body></html>

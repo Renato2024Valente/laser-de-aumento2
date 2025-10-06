@@ -1,0 +1,262 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lente Delgada — Traçado de Raios (Interativo)</title>
+<style>
+  :root{ --bg:#0b1220; --panel:#0f1830; --muted:#9fb0c8; --text:#eef4ff; --accent:#66a3ff; --accent2:#4de3c4; }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 800px at 10% -10%, #1a2440 0%, transparent 60%) no-repeat,
+                       radial-gradient(1200px 800px at 110% 10%, #11223a 0%, transparent 60%) no-repeat,
+                       var(--bg); color:var(--text);font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial}
+  header{position:sticky;top:0;padding:14px 18px;background:rgba(8,12,24,.75);backdrop-filter:blur(10px);
+         border-bottom:1px solid rgba(255,255,255,.08);z-index:5}
+  h1{margin:0;font-size:clamp(18px,3vw,28px)} .muted{color:var(--muted)}
+  .wrap{max-width:1200px;margin:18px auto;padding:0 18px}
+  .grid{display:grid;grid-template-columns:320px 1fr;gap:12px}
+  @media (max-width:900px){.grid{grid-template-columns:1fr} canvas{height:440px}}
+  .controls{background:rgba(18,26,42,.8);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:14px}
+  .ctrl{margin:10px 0} .ctrl label{display:flex;justify-content:space-between;gap:10px}
+  input[type="range"]{width:100%}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .pill{display:inline-block;border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:4px 10px}
+  .eq{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      background:rgba(255,255,255,.06);padding:2px 6px;border-radius:8px}
+  .canvasWrap{position:relative;border:1px solid rgba(255,255,255,.06);border-radius:16px;overflow:hidden;background:#0c1426}
+  canvas{display:block;width:100%;height:520px}
+  .legend{padding:10px 14px;color:var(--muted);font-size:14px;background:#0c1426}
+  footer{color:var(--muted);text-align:center;padding:16px}
+  .dash{stroke-dasharray:8 6}
+</style>
+</head>
+<body>
+<header>
+  <h1>Lente Delgada — Traçado de Raios <span class="muted">| 1/f = 1/dₒ + 1/dᵢ</span></h1>
+</header>
+
+<div class="wrap">
+  <div class="grid">
+    <div class="controls">
+      <div class="ctrl">
+        <label>Foco f (cm) — <i>+</i> convergente / <i>−</i> divergente <span><span id="f_val">20</span> cm</span></label>
+        <input type="range" id="f" min="-60" max="60" step="1" value="20">
+      </div>
+      <div class="ctrl">
+        <label>Distância do objeto dₒ (cm) <span><span id="do_val">50</span> cm</span></label>
+        <input type="range" id="do" min="10" max="160" step="1" value="50">
+      </div>
+      <div class="ctrl">
+        <label>Altura do objeto hₒ (cm) <span><span id="ho_val">12</span> cm</span></label>
+        <input type="range" id="ho" min="2" max="40" step="1" value="12">
+      </div>
+      <div class="ctrl">
+        <label><input type="checkbox" id="auto"> Animar dₒ</label>
+      </div>
+      <div class="ctrl muted">
+        <div class="row">
+          <span class="pill">dᵢ: <b id="di_val">33.3 cm</b></span>
+          <span class="pill">M: <b id="m_val">-0.67×</b></span>
+          <span class="pill">hᵢ: <b id="hi_val">-8.0 cm</b></span>
+          <span class="pill">Imagem: <b id="tipo_val">real/invertida</b></span>
+        </div>
+        <div style="margin-top:6px">
+          <span class="eq">1/f = 1/dₒ + 1/dᵢ</span> &nbsp;|&nbsp; <span class="eq">M = -dᵢ/dₒ</span> &nbsp;|&nbsp; <span class="eq">hᵢ = M·hₒ</span>
+        </div>
+      </div>
+      <div class="ctrl muted">
+        Raios principais: paralelo→foco, pelo centro (não desvia), via foco→paralelo.
+      </div>
+    </div>
+
+    <div class="canvasWrap">
+      <canvas id="cv" width="1100" height="520"></canvas>
+      <div class="legend">
+        <span class="pill">Lens: azul</span>
+        <span class="pill">Objeto: verde</span>
+        <span class="pill">Imagem real: branco (sólido)</span>
+        <span class="pill">Imagem virtual: branco (tracejado)</span>
+      </div>
+    </div>
+  </div>
+
+  <section class="legend" style="margin-top:14px">
+    <b>Dicas para aula</b><br>
+    • Troque o sinal do foco (f) para comparar <u>convergente</u> × <u>divergente</u>.<br>
+    • Aproxime/afaste o objeto e observe quando a imagem é real (dᵢ &gt; 0) ou virtual (dᵢ &lt; 0).<br>
+    • Repare no tamanho e orientação: <span class="eq">M</span> negativo = invertida; |M| &gt; 1 = ampliada.
+  </section>
+
+  <footer>© 2025 — Ensino de Óptica: simulação didática (HTML/JS puro).</footer>
+</div>
+
+<script>
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const fIn  = document.getElementById('f');
+const doIn = document.getElementById('do');
+const hoIn = document.getElementById('ho');
+const auto = document.getElementById('auto');
+
+const fVal = document.getElementById('f_val');
+const doVal= document.getElementById('do_val');
+const hoVal= document.getElementById('ho_val');
+const diVal= document.getElementById('di_val');
+const mVal = document.getElementById('m_val');
+const hiVal= document.getElementById('hi_val');
+const tipoVal= document.getElementById('tipo_val');
+
+const W = cv.width, H = cv.height;
+const yAxis = H*0.55;   // eixo óptico
+const xLens = W*0.5;    // posição da lente
+const pxPerCm = 4.5;    // escala gráfica (cm → px)
+let t = 0;
+
+function draw(){
+  const f_cm = parseFloat(fIn.value);
+  const do_cm= parseFloat(doIn.value);
+  const ho_cm= parseFloat(hoIn.value);
+
+  fVal.textContent = f_cm.toFixed(0);
+  doVal.textContent= do_cm.toFixed(0);
+  hoVal.textContent= ho_cm.toFixed(0);
+
+  // Evitar f=0
+  const f = (Math.abs(f_cm) < 0.5) ? (f_cm<0?-0.5:0.5) : f_cm;
+
+  // Lente delgada: 1/f = 1/do + 1/di  -> di = 1 / (1/f - 1/do)
+  let di_cm;
+  if (Math.abs(1/f - 1/do_cm) < 1e-6) {
+    di_cm = 1e6; // tende ao infinito (imagem no infinito)
+  } else {
+    di_cm = 1 / (1/f - 1/do_cm);
+  }
+  const M = -di_cm / do_cm;
+  const hi_cm = M * ho_cm;
+
+  // UI
+  diVal.textContent = (Math.abs(di_cm)>5e5 ? '∞' : di_cm.toFixed(1) + ' cm');
+  mVal.textContent  = (isFinite(M) ? M.toFixed(2) : '—') + '×';
+  hiVal.textContent = (isFinite(hi_cm) ? hi_cm.toFixed(1) : '—') + ' cm';
+  tipoVal.textContent = (di_cm>0 ? 'real/invertida' : 'virtual/ereta');
+
+  // Mapeamento x
+  const xObj = xLens - do_cm*pxPerCm;
+  const xImg = xLens + di_cm*pxPerCm; // se di<0, xImg fica à esquerda (virtual)
+  const yTopObj = yAxis - ho_cm*pxPerCm;
+  const yBase   = yAxis;
+
+  ctx.clearRect(0,0,W,H);
+
+  // fundo
+  const bg = ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#0f1a2f'); bg.addColorStop(1,'#0b1326');
+  ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+
+  // eixo
+  ctx.strokeStyle = '#2b364f'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0,yAxis); ctx.lineTo(W,yAxis); ctx.stroke();
+
+  // lente (eixo vertical + formato)
+  ctx.strokeStyle = '#60a5fa'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(xLens, H*0.1); ctx.lineTo(xLens, H*0.9); ctx.stroke();
+  // semicírculos para indicar convergente/divergente
+  ctx.beginPath();
+  ctx.strokeStyle = f_cm>=0 ? '#4de3c4' : '#fbbf24';
+  ctx.arc(xLens, H*0.5, 80, -Math.PI/2, Math.PI/2, f_cm<0); // estilo indicativo
+  ctx.stroke();
+
+  // focos (F e F')
+  ctx.fillStyle = '#cfe6ff'; ctx.font = '12px ui-monospace';
+  const xF_left  = xLens - Math.abs(f)*pxPerCm * (f_cm>=0 ? 1 : 1); // posição em módulo
+  const xF_right = xLens + Math.abs(f)*pxPerCm * (f_cm>=0 ? 1 : 1);
+  ctx.fillRect(xF_left-3, yAxis-3, 6, 6);
+  ctx.fillRect(xF_right-3, yAxis-3, 6, 6);
+  ctx.fillText('F', xF_left-10, yAxis-8);
+  ctx.fillText("F'", xF_right+6, yAxis-8);
+
+  // objeto (seta verde)
+  ctx.strokeStyle = '#34d399'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(xObj, yBase); ctx.lineTo(xObj, yTopObj); ctx.stroke();
+  ctx.beginPath(); // pontinha da seta
+  ctx.moveTo(xObj-6, yTopObj+14); ctx.lineTo(xObj, yTopObj); ctx.lineTo(xObj+6, yTopObj+14); ctx.stroke();
+  ctx.fillStyle = '#9ff6d9'; ctx.fillText('Objeto', xObj-30, yTopObj-10);
+
+  // imagem (seta branca) — sólida se real (di>0), tracejada se virtual (di<0)
+  const yTopImg = yAxis - hi_cm*pxPerCm;
+  ctx.save();
+  ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 2.5;
+  if (di_cm < 0) { ctx.setLineDash([10,8]); } else { ctx.setLineDash([]); }
+  if (isFinite(xImg) && Math.abs(xImg) < 1e6) {
+    ctx.beginPath(); ctx.moveTo(xImg, yBase); ctx.lineTo(xImg, yTopImg); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(xImg-6, yTopImg + (hi_cm>0? -14:14)); ctx.lineTo(xImg, yTopImg); ctx.lineTo(xImg+6, yTopImg + (hi_cm>0? -14:14)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e5e7eb'; ctx.fillText('Imagem', xImg-30, yTopImg + (hi_cm>0? -18: -10));
+  }
+  ctx.restore();
+
+  // raios principais
+  function ray(x1,y1,x2,y2,color,w=1.6, dash=false){
+    ctx.save();
+    ctx.strokeStyle = color; ctx.lineWidth = w;
+    if(dash) ctx.setLineDash([8,6]); else ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    ctx.restore();
+  }
+
+  // 1) paralelo → lente → passa pelo foco da direita (para convergente) / parece vir do foco (divergente)
+  const yRay1 = yTopObj; // parte do topo do objeto, paralelo ao eixo (y constante até a lente)
+  ray(xObj, yRay1, xLens, yRay1, '#4de3c4');
+  // Após a lente: vai ao ponto imagem (xImg,yTopImg). Se virtual, traço sólido até a lente e hash tracejado para trás
+  if (di_cm > 0) {
+    ray(xLens, yRay1, xImg, yTopImg, '#4de3c4');
+  } else {
+    // parece vir do foco → desenhar para a direita com pequena inclinação e retroprolongar tracejado até a imagem virtual
+    ray(xLens, yRay1, xLens + 140, yRay1 + (yTopImg - yRay1) * (140/Math.max(60, Math.abs(xImg - xLens))), '#4de3c4');
+    ray(xLens, yRay1, xImg, yTopImg, '#4de3c4', 1.2, true);
+  }
+
+  // 2) passando pelo centro da lente (aproximação: sem desvio)
+  ray(xObj, yTopObj, xLens + (xLens - xObj), yTopObj + (yTopObj - yAxis), '#60a5fa');
+
+  // 3) via foco esquerdo → sai paralelo
+  // Ir do topo do objeto ao foco da lente do lado do objeto
+  const xF_obj = xLens - Math.abs(f)*pxPerCm;
+  ray(xObj, yTopObj, xLens, yAxis - ( (yTopObj - yAxis) * ( (xLens - xObj)/(xLens - xF_obj + 1e-6) ) ), '#fbbf24');
+  // sair paralelo ao eixo
+  ray(xLens, yAxis - ( (yTopObj - yAxis) * ( (xLens - xObj)/(xLens - xF_obj + 1e-6) ) ), xLens+200, yAxis - ( (yTopObj - yAxis) * ( (xLens - xObj)/(xLens - xF_obj + 1e-6) ) ));
+
+  // marcações de distâncias do e di
+  ctx.strokeStyle = '#94a3b8'; ctx.setLineDash([6,6]); ctx.lineWidth = 1;
+  // dₒ
+  ctx.beginPath(); ctx.moveTo(xObj, yAxis+30); ctx.lineTo(xLens, yAxis+30); ctx.stroke();
+  ctx.setLineDash([]); ctx.fillStyle = '#cbd5e1'; ctx.font = '12px ui-monospace';
+  ctx.fillText('dₒ', (xObj+xLens)/2, yAxis+26);
+  // dᵢ (só se finito)
+  if (isFinite(xImg) && Math.abs(xImg) < 1e6) {
+    ctx.setLineDash([6,6]);
+    ctx.beginPath(); ctx.moveTo(xLens, yAxis+48); ctx.lineTo(xImg, yAxis+48); ctx.stroke();
+    ctx.setLineDash([]); ctx.fillText('dᵢ', (xLens+xImg)/2, yAxis+44);
+  }
+}
+
+function tick(){
+  if(auto.checked){
+    t += 0.016;
+    const mid = 85, amp = 60;
+    doIn.value = Math.max(10, Math.min(160, mid + amp*Math.sin(t)));
+    draw();
+  }
+  requestAnimationFrame(tick);
+}
+
+// Events
+[fIn, doIn, hoIn].forEach(el => el.addEventListener('input', draw));
+auto.addEventListener('change', draw);
+
+// First render
+draw(); tick();
+</script>
+</body>
+</html>

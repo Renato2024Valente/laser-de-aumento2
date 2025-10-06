@@ -1,0 +1,98 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Difusão — Reflexão Difusa (Lambert)</title>
+<style>
+  :root{--bg:#0b1220;--muted:#a8b3c7;--text:#eef4ff}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto}
+  header{position:sticky;top:0;padding:14px 18px;background:#0e1526;border-bottom:1px solid #1e293b}
+  h1{margin:0;font-size:clamp(18px,3vw,26px)} .muted{color:var(--muted)}
+  .wrap{max-width:1100px;margin:16px auto;padding:0 16px}
+  .grid{display:grid;grid-template-columns:300px 1fr;gap:12px} @media(max-width:900px){.grid{grid-template-columns:1fr}}
+  .controls{background:#0e1930;border:1px solid #1f2a44;border-radius:14px;padding:12px}
+  .ctrl{margin:10px 0} .ctrl label{display:flex;justify-content:space-between;gap:10px}
+  input[type=range]{width:100%} .legend{color:var(--muted);font-size:13px;margin-top:8px}
+  canvas{width:100%;height:520px;background:#0b1326;border:1px solid #1f2a44;border-radius:14px}
+  .pill{display:inline-block;border:1px solid #2c3a57;border-radius:999px;padding:4px 10px;margin-right:6px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header><h1>Difusão <span class="muted">— reflexão difusa (Lambert)</span></h1></header>
+<div class="wrap">
+  <div class="grid">
+    <div class="controls">
+      <div class="ctrl"><label>Rugosidade (escala micro) <span id="rug_v">60%</span></label>
+        <input id="rug" type="range" min="0" max="100" step="1" value="60"></div>
+      <div class="ctrl"><label>Abertura angular (°) <span id="ang_v">90</span></label>
+        <input id="ang" type="range" min="10" max="180" step="1" value="90"></div>
+      <div class="ctrl"><label>Raios simulados <span id="n_v">400</span></label>
+        <input id="n" type="range" min="50" max="1000" step="10" value="400"></div>
+      <div class="legend">
+        • Superfícies macias (papel, parede) espalham luz em muitas direções (modelo <b>Lambertiano</b>: I ∝ cosθ).<br>
+        • Ajuste a rugosidade e veja o lóbulo de espalhamento se abrir/fechar.
+      </div>
+      <div style="margin-top:8px">
+        <span class="pill">Feixe incidente (ciano)</span>
+        <span class="pill">Distribuição de saída (branco)</span>
+      </div>
+    </div>
+    <canvas id="cv" width="1000" height="520"></canvas>
+  </div>
+</div>
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const rug=document.getElementById('rug'), ang=document.getElementById('ang'), n=document.getElementById('n');
+const rug_v=document.getElementById('rug_v'), ang_v=document.getElementById('ang_v'), n_v=document.getElementById('n_v');
+
+function draw(){
+  const W=cv.width,H=cv.height, cx=W*0.62, cy=H*0.6;
+  const rough=rug.value/100; rug_v.textContent=rug.value+'%';
+  const amax=ang.value*Math.PI/180; ang_v.textContent=ang.value;
+  const rays=parseInt(n.value); n_v.textContent=rays;
+
+  ctx.clearRect(0,0,W,H);
+  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#0f1a2f'); g.addColorStop(1,'#0b1326'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+
+  // superfície difusora (linha vertical)
+  ctx.strokeStyle='#94a3b8'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(cx,H*0.2); ctx.lineTo(cx,H*0.8); ctx.stroke();
+  ctx.fillStyle='#9cc2ff'; ctx.font='12px ui-monospace'; ctx.fillText('Superfície', cx-28, H*0.18);
+
+  // feixe incidente (da esquerda)
+  const theta0 = 0; // incidência normal ao plano de desenho (simplificado)
+  ctx.strokeStyle='#4de3c4'; ctx.beginPath(); ctx.moveTo(cx-220, cy); ctx.lineTo(cx, cy); ctx.stroke();
+
+  // distribuição lambertiana aproximada centrada no ângulo especular (espelho) misturada com ruído pela rugosidade
+  // aqui, centro = ângulo de reflexão (igual ao de incidência); como incidência é 0 (normal à superfície), centro=0.
+  function randn(){ // gauss simples
+    let u=0,v=0; while(u===0) u=Math.random(); while(v===0) v=Math.random();
+    return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+  }
+  const maxLen=180;
+  for(let i=0;i<rays;i++){
+    // amostra angular com peso ~ cos(theta) dentro do cone [ -amax/2, +amax/2 ]
+    let th = (Math.random()-0.5)*amax;
+    // mistura com gauss (rugosidade): abre a distribuição
+    th += randn()*rough*(20*Math.PI/180);
+    // clamp
+    th = Math.max(-Math.PI/2, Math.min(Math.PI/2, th));
+    const len = maxLen*(0.4+0.6*Math.random())*Math.max(0,Math.cos(th));
+    const dx=Math.cos(th), dy=-Math.sin(th);
+    ctx.strokeStyle='rgba(255,255,255,0.18)'; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx+dx*len, cy+dy*len); ctx.stroke();
+  }
+
+  // lóbulo médio (envolvente)
+  ctx.strokeStyle='#e5e7eb'; ctx.setLineDash([6,6]); ctx.beginPath();
+  for(let k=-40;k<=40;k++){
+    const th = (k/40)*(amax/2);
+    const len = maxLen* Math.max(0,Math.cos(th));
+    const x = cx + Math.cos(th)*len, y = cy - Math.sin(th)*len;
+    if(k==-40) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.stroke(); ctx.setLineDash([]);
+}
+[rug,ang,n].forEach(e=>e.addEventListener('input', draw)); draw();
+</script>
+</body></html>

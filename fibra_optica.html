@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Refração — Fibra Óptica (TIR e NA) | Simulação</title>
+<style>
+  :root{--bg:#0b1220;--muted:#9fb0c8;--text:#eef4ff;--panel:#0f1830}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 800px at 10% -10%, #1a2440 0%, transparent 60%) no-repeat,
+                       radial-gradient(1200px 800px at 110% 10%, #11223a 0%, transparent 60%) no-repeat,
+                       var(--bg); color:var(--text); font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto}
+  header{padding:14px 16px;background:#0e1526;border-bottom:1px solid #1e293b}
+  h1{margin:0;font-size:clamp(18px,3vw,26px)}
+  .muted{color:var(--muted)}
+  .wrap{max-width:1200px;margin:16px auto;padding:0 16px}
+  .grid{display:grid;grid-template-columns:320px 1fr;gap:12px}
+  @media (max-width:900px){.grid{grid-template-columns:1fr} canvas{height:460px}}
+  .controls{background:#0e1930;border:1px solid #1f2a44;border-radius:14px;padding:12px}
+  .ctrl{margin:10px 0} .ctrl label{display:flex;justify-content:space-between;gap:10px}
+  input[type=range]{width:100%}
+  .legend{color:var(--muted);font-size:13px;margin-top:8px}
+  canvas{width:100%;height:520px;background:#0b1326;border:1px solid #1f2a44;border-radius:14px}
+  .pill{display:inline-block;border:1px solid #2c3a57;border-radius:999px;padding:4px 10px;margin-right:6px;color:var(--muted)}
+  .row{display:flex;flex-wrap:wrap;gap:8px}
+  .eq{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      background:rgba(255,255,255,.06);padding:2px 6px;border-radius:8px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Refração — Fibra Óptica <span class="muted">| Reflexão Interna Total e Abertura Numérica</span></h1>
+</header>
+<div class="wrap">
+  <div class="grid">
+    <div class="controls">
+      <div class="ctrl"><label>n<sub>núcleo</sub> <span id="n1_v">1.48</span></label>
+        <input id="n1" type="range" min="1.30" max="1.80" step="0.01" value="1.48"></div>
+      <div class="ctrl"><label>n<sub>casca</sub> <span id="n2_v">1.44</span></label>
+        <input id="n2" type="range" min="1.00" max="1.75" step="0.01" value="1.44"></div>
+      <div class="ctrl"><label>Ângulo no núcleo φ (°) <span id="phi_v">10</span></label>
+        <input id="phi" type="range" min="0.1" max="40" step="0.1" value="10"></div>
+      <div class="ctrl"><label>Raio do núcleo (mm) <span id="R_v">1.0</span></label>
+        <input id="R" type="range" min="0.3" max="2.5" step="0.1" value="1.0"></div>
+      <div class="ctrl"><label><input type="checkbox" id="scan"> Varredura automática de φ</label></div>
+      <div class="legend">
+        <div class="row">
+          <span class="pill">Ângulo crítico θ<sub>c</sub>: <b id="tc_v">—</b></span>
+          <span class="pill">φ<sub>max guiado</sub> = 90°−θ<sub>c</sub>: <b id="phimax_v">—</b></span>
+          <span class="pill">NA = √(n₁²−n₂²): <b id="na_v">—</b></span>
+          <span class="pill">θ<sub>max</sub> no ar = arcsen(NA): <b id="thmax_v">—</b></span>
+        </div>
+        <div class="eq">Condição de guiamento (modelo de placa): TIR se i ≥ θ<sub>c</sub>, com i = 90° − φ.</div>
+      </div>
+    </div>
+    <canvas id="cv" width="1100" height="520"></canvas>
+  </div>
+
+  <section class="legend" style="margin-top:12px">
+    <b>Como ler</b>: raio lançado no núcleo (esquerda) com ângulo φ em relação ao eixo. Se a incidência na borda
+    for maior que θ<sub>c</sub>, há <u>reflexão interna total</u> (trajeto “zigue-zague”). Se não, o raio “vaza” (leaky)
+    para a casca e fora. Abertura numérica (NA) prevê o cone de aceitação no ar.
+  </section>
+</div>
+
+<script>
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const n1=document.getElementById('n1'), n2=document.getElementById('n2'), phi=document.getElementById('phi'), R=document.getElementById('R'), scan=document.getElementById('scan');
+const n1_v=document.getElementById('n1_v'), n2_v=document.getElementById('n2_v'), phi_v=document.getElementById('phi_v'), R_v=document.getElementById('R_v');
+const tc_v=document.getElementById('tc_v'), phimax_v=document.getElementById('phimax_v'), na_v=document.getElementById('na_v'), thmax_v=document.getElementById('thmax_v');
+
+let t=0;
+function draw(){
+  const W=cv.width,H=cv.height;
+  const n_core=parseFloat(n1.value), n_clad=parseFloat(n2.value);
+  // manter n2 < n1 automaticamente
+  if(n_clad>=n_core){ n2.value=(n_core-0.01).toFixed(2); }
+  const n2v=parseFloat(n2.value);
+
+  const phi_deg=parseFloat(phi.value); // ângulo dentro do núcleo vs eixo
+  const R_mm=parseFloat(R.value);
+
+  n1_v.textContent=n_core.toFixed(2);
+  n2_v.textContent=n2v.toFixed(2);
+  phi_v.textContent=phi_deg.toFixed(1);
+  R_v.textContent=R_mm.toFixed(1);
+
+  // métricas
+  const tc = Math.asin(Math.min(1, n2v/n_core)); // rad
+  const tc_deg=tc*180/Math.PI;
+  const phi_max = 90 - tc_deg; // deg (condição guiada: phi <= phi_max)
+  const NA = Math.sqrt(Math.max(0, n_core*n_core - n2v*n2v));
+  const th_air = Math.asin(Math.min(1, NA)); // rad
+
+  tc_v.textContent=tc_deg.toFixed(2)+'°';
+  phimax_v.textContent=(isFinite(phi_max)?phi_max.toFixed(2)+'°':'—');
+  na_v.textContent=NA.toFixed(3);
+  thmax_v.textContent=(isFinite(th_air)?(th_air*180/Math.PI).toFixed(2)+'°':'—');
+
+  // canvas setup
+  ctx.clearRect(0,0,W,H);
+  const g=ctx.createLinearGradient(0,0,W,0); g.addColorStop(0,'#0f1a2f'); g.addColorStop(1,'#0b1326'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+
+  // escala: raio em px
+  const pxPerMm = Math.min( (H*0.7)/(2*R_mm), 200 );
+  const Rpx = R_mm * pxPerMm;
+  const cx = W*0.12, cy = H*0.5; // entrada do núcleo no lado esquerdo
+  const coreTop = cy - Rpx, coreBot = cy + Rpx;
+
+  // desenhar núcleo e casca como guia (faixas horizontais tipo guia planar)
+  // Núcleo
+  ctx.fillStyle = '#17325a'; ctx.fillRect(cx, coreTop, W*0.76, 2*Rpx);
+  ctx.fillStyle = '#9cc2ff'; ctx.font='12px ui-monospace'; ctx.fillText('Núcleo (n₁)', cx+8, coreTop-10);
+  // Casca acima e abaixo
+  ctx.fillStyle = '#0c1a33aa'; ctx.fillRect(cx, 0, W*0.76, coreTop);
+  ctx.fillRect(cx, coreBot, W*0.76, H-coreBot);
+  ctx.fillStyle = '#9cc2ff'; ctx.fillText('Casca (n₂)', cx+8, coreTop-24);
+
+  // eixo
+  ctx.strokeStyle='#2b364f'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(0,cy); ctx.lineTo(W,cy); ctx.stroke();
+
+  // cone de aceitação (no ar) ilustrativo na entrada
+  const coneLen = 90;
+  const th = Math.asin(Math.min(1, NA));
+  ctx.strokeStyle = '#94a3b8'; ctx.setLineDash([6,6]);
+  ctx.beginPath(); ctx.moveTo(cx-18, cy); ctx.lineTo(cx-18 - Math.cos(th)*coneLen, cy - Math.sin(th)*coneLen); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx-18, cy); ctx.lineTo(cx-18 - Math.cos(th)*coneLen, cy + Math.sin(th)*coneLen); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='#cfe6ff'; ctx.fillText('θ_max no ar', cx-18 - Math.cos(th)*coneLen - 68, cy-6);
+
+  // lançar raio no núcleo (lado esquerdo do núcleo, no centro)
+  let phi_rad = phi_deg*Math.PI/180;
+  if(scan.checked){
+    t += 0.016;
+    // oscilar entre 0.5° e min(38°, phi_max*0.95)
+    const maxPhi = Math.min(38, Math.max(1, phi_max*0.95));
+    phi_rad = (( (maxPhi-0.5)/2 )*(1+Math.sin(t)) + 0.5) * Math.PI/180;
+  }
+
+  let x = cx+6, y = cy; // partida no centro do núcleo
+  let dirx = Math.cos(phi_rad), diry = Math.sin(phi_rad); // componente y positiva = sobe
+  const maxSteps = 40;
+  const segLenMax = W*0.7;
+
+  function line(x1,y1,x2,y2,color,w=2,dash=false){
+    ctx.save(); ctx.strokeStyle=color; ctx.lineWidth=w; if(dash) ctx.setLineDash([8,6]);
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); ctx.restore();
+  }
+
+  let guided = true;
+  for(let step=0; step<maxSteps; step++){
+    // próximo encontro com borda do núcleo (topo ou base) no modelo planar
+    const targetY = (diry<0)? coreTop : coreBot;
+    const dy = targetY - y;
+    const dx = dy / (diry + 1e-9) * dirx;
+    const xNext = x + dx;
+    const yNext = targetY;
+
+    // limite de comprimento e da janela à direita
+    let stopX = cx + segLenMax;
+    if(xNext > stopX){ line(x,y,stopX, y + (stopX - x) * (diry/dirx), '#4de3c4', 2); break; }
+    line(x, y, xNext, yNext, '#4de3c4', 2);
+
+    // ângulo de incidência em relação à normal da borda (normal vertical): i = 90° - φ
+    const phi_local = Math.atan2(Math.abs(diry), Math.abs(dirx)); // 0..pi/2
+    const inc = Math.PI/2 - phi_local; // rad
+    const inc_deg = inc*180/Math.PI;
+
+    // verifica TIR
+    if(inc + 1e-9 >= tc){
+      // refletir: inverter componente vertical
+      diry = -diry;
+      x = xNext; y = yNext;
+      guided = guided && true;
+      continue;
+    } else {
+      // vazamento: desenhar refração para fora (na casca)
+      guided = false;
+      // Snell: n1*sin(inc) = n2*sin(r)
+      let s = n_core*Math.sin(inc)/n2v;
+      s = Math.max(-1, Math.min(1, s));
+      const r = Math.asin(s); // ângulo na casca relativo à normal (vertical)
+      const phi_out = Math.PI/2 - r; // em relação ao eixo
+      const sign = (diry<0)? -1 : +1; // para cima ou baixo
+      const dx2 = Math.cos(phi_out)*120;
+      const dy2 = Math.sin(phi_out)*120*sign;
+      line(xNext, yNext, xNext+dx2, yNext+dy2, '#f87171', 2, true); // segmento vazado (tracejado vermelho)
+      break;
+    }
+  }
+
+  // anotações
+  ctx.fillStyle='#cfe6ff'; ctx.font='12px ui-monospace';
+  ctx.fillText('φ (núcleo) = '+(phi_rad*180/Math.PI).toFixed(1)+'°', cx+8, coreBot+18);
+  ctx.fillText('θc = '+tc_deg.toFixed(2)+'°', cx+140, coreBot+18);
+  ctx.fillText(guided? 'Guiado por TIR' : 'Vazamento (sem TIR)', cx+240, coreBot+18);
+}
+[n1,n2,phi,R,scan].forEach(e=>e.addEventListener('input', draw)); draw();
+</script>
+</body>
+</html>

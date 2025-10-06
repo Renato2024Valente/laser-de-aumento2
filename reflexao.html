@@ -1,0 +1,92 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reflexão — Lei da Igualdade dos Ângulos</title>
+<style>
+  :root{--bg:#0b1220;--muted:#a8b3c7;--text:#eef4ff;--accent:#66a3ff;--panel:#0f1830}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto}
+  header{position:sticky;top:0;padding:14px 18px;background:#0e1526;border-bottom:1px solid #1e293b}
+  h1{margin:0;font-size:clamp(18px,3vw,26px)} .muted{color:var(--muted)}
+  .wrap{max-width:1100px;margin:16px auto;padding:0 16px}
+  .grid{display:grid;grid-template-columns:300px 1fr;gap:12px} @media(max-width:900px){.grid{grid-template-columns:1fr}}
+  .controls{background:#0e1930;border:1px solid #1f2a44;border-radius:14px;padding:12px}
+  .ctrl{margin:10px 0} .ctrl label{display:flex;justify-content:space-between;gap:10px}
+  input[type=range]{width:100%} .legend{color:var(--muted);font-size:13px;margin-top:8px}
+  canvas{width:100%;height:520px;background:#0b1326;border:1px solid #1f2a44;border-radius:14px}
+  .pill{display:inline-block;border:1px solid #2c3a57;border-radius:999px;padding:4px 10px;margin-right:6px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header><h1>Reflexão no espelho plano <span class="muted">— θᵢ = θᵣ</span></h1></header>
+<div class="wrap">
+  <div class="grid">
+    <div class="controls">
+      <div class="ctrl"><label>Ângulo de incidência θᵢ (°) <span id="ang_v">35</span></label>
+        <input id="ang" type="range" min="0" max="85" step="1" value="35"></div>
+      <div class="ctrl"><label>Rugosidade (difusa) <span id="rug_v">0%</span></label>
+        <input id="rug" type="range" min="0" max="100" step="1" value="0"></div>
+      <div class="legend">
+        • Em superfície especular: <b>θᵢ = θᵣ</b>.<br>
+        • Aumente a <b>rugosidade</b> para ver refletância difusa (microfacetas).
+      </div>
+      <div style="margin-top:8px">
+        <span class="pill">Normal (tracejada)</span>
+        <span class="pill">Raios incidentes (ciano)</span>
+        <span class="pill">Raios refletidos (verde)</span>
+      </div>
+    </div>
+    <canvas id="cv" width="1000" height="520"></canvas>
+  </div>
+</div>
+<script>
+const cv = document.getElementById('cv'), ctx=cv.getContext('2d');
+const ang = document.getElementById('ang'), ang_v=document.getElementById('ang_v');
+const rug = document.getElementById('rug'), rug_v=document.getElementById('rug_v');
+function draw(){
+  const W=cv.width,H=cv.height, cx=W*0.62, cy=H*0.6; // espelho em x=cx (vertical)
+  const theta = ang.value*Math.PI/180; ang_v.textContent=ang.value;
+  const rough = rug.value/100; rug_v.textContent = rug.value+'%';
+  ctx.clearRect(0,0,W,H);
+  // fundo
+  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#0f1a2f'); g.addColorStop(1,'#0b1326'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // espelho
+  ctx.strokeStyle='#60a5fa'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(cx,H*0.12); ctx.lineTo(cx,H*0.88); ctx.stroke();
+  ctx.fillStyle='#9cc2ff'; ctx.font='12px ui-monospace'; ctx.fillText('Espelho', cx-24, H*0.1);
+  // normal
+  ctx.save(); ctx.setLineDash([8,6]); ctx.strokeStyle='#94a3b8';
+  ctx.beginPath(); ctx.moveTo(cx,cy-160); ctx.lineTo(cx,cy+160); ctx.stroke(); ctx.restore();
+  // raio incidente (vindo da esquerda)
+  const len=260;
+  const xi = cx - Math.cos(theta)*len, yi = cy - Math.sin(theta)*len;
+  ctx.strokeStyle='#4de3c4'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(xi, yi); ctx.lineTo(cx, cy); ctx.stroke();
+  // raio refletido especular (para a direita, ângulo igual)
+  const xr = cx + Math.cos(theta)*len, yr = cy - Math.sin(theta)*len;
+  ctx.strokeStyle='#34d399'; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(xr, yr); ctx.stroke();
+  // feixe "espesso"
+  for(let k=-3;k<=3;k++){
+    const off=k*4;
+    ctx.beginPath(); ctx.moveTo(xi, yi+off); ctx.lineTo(cx, cy+off); ctx.strokeStyle='#4de3c422'; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx, cy+off); ctx.lineTo(xr, yr+off); ctx.strokeStyle='#34d39922'; ctx.stroke();
+  }
+  // rugosidade → raios difusos (lambertianos aproximados)
+  const n = Math.round(rough*60);
+  for(let i=0;i<n;i++){
+    const phi = (Math.random()*Math.PI) - Math.PI/2; // ângulos ao redor da normal
+    const dir = Math.random()<0.5 ? -1: +1;
+    const a = (theta*(1-rough) + phi*rough)*dir;
+    const rlen = 150*(0.4+Math.random()*0.6);
+    const dx = Math.cos(a), dy = -Math.sin(a);
+    ctx.strokeStyle = '#7ef7d955'; ctx.beginPath();
+    ctx.moveTo(cx, cy); ctx.lineTo(cx+dx*rlen, cy+dy*rlen); ctx.stroke();
+  }
+  // ângulos
+  ctx.fillStyle='#cfe6ff';
+  ctx.fillText('θᵢ', cx-30, cy-10);
+  ctx.fillText('θᵣ', cx+20, cy-10);
+}
+ang.addEventListener('input', draw); rug.addEventListener('input', draw); draw();
+</script>
+</body></html>

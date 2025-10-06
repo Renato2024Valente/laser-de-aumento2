@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Laser — Projeção & Difração</title>
+<style>
+  :root{--bg:#0b1220;--muted:#a8b3c7;--text:#eef4ff}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto}
+  header{padding:14px 16px;background:#0e1526;border-bottom:1px solid #1e293b}
+  h1{margin:0;font-size:clamp(18px,3vw,26px)} .muted{color:var(--muted)}
+  .wrap{max-width:1100px;margin:16px auto;padding:0 16px}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 12px}
+  .tab{border:1px solid #1f2a44;background:#0e1930;padding:8px 10px;border-radius:10px;cursor:pointer}
+  .tab.active{background:linear-gradient(135deg,#66a3ff,#2a77ff);color:#001228;font-weight:800}
+  .grid{display:grid;grid-template-columns:300px 1fr;gap:12px} @media(max-width:900px){.grid{grid-template-columns:1fr}}
+  .controls{background:#0e1930;border:1px solid #1f2a44;border-radius:14px;padding:12px}
+  .ctrl{margin:10px 0} .ctrl label{display:flex;justify-content:space-between;gap:10px}
+  input[type=range]{width:100%}
+  canvas{width:100%;height:520px;background:#0b1326;border:1px solid #1f2a44;border-radius:14px}
+  .legend{color:var(--muted);font-size:13px;margin-top:8px}
+  .pill{display:inline-block;border:1px solid #2c3a57;border-radius:999px;padding:4px 10px;margin-right:6px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header><h1>Laser — <span class="muted">Projeção & Difração</span></h1></header>
+<div class="wrap">
+  <div class="tabs">
+    <button class="tab active" data-tab="proj">Projeção</button>
+    <button class="tab" data-tab="difr">Difração</button>
+  </div>
+
+  <section id="proj" class="panel" style="display:block">
+    <div class="grid">
+      <div class="controls">
+        <div class="ctrl"><label>Distância até parede L (m) <span id="L_v">2.0</span></label>
+          <input id="L" type="range" min="0.5" max="6" step="0.1" value="2"></div>
+        <div class="ctrl"><label>Objeto a partir do laser s (m) <span id="s_v">0.10</span></label>
+          <input id="s" type="range" min="0.02" max="0.8" step="0.01" value="0.10"></div>
+        <div class="ctrl"><label>Altura do objeto h₀ (cm) <span id="h0_v">1.0</span></label>
+          <input id="h0" type="range" min="0.2" max="5" step="0.1" value="1.0"></div>
+        <div class="legend">Ampliação aproximada <b>M ≈ L/s</b>; sombra cresce com L e diminui com s.</div>
+      </div>
+      <canvas id="cvP" width="1000" height="520"></canvas>
+    </div>
+  </section>
+
+  <section id="difr" class="panel" style="display:none">
+    <div class="grid">
+      <div class="controls">
+        <div class="ctrl"><label>Distância L (m) <span id="Ld_v">2.0</span></label>
+          <input id="Ld" type="range" min="0.5" max="8" step="0.1" value="2"></div>
+        <div class="ctrl"><label>Largura da fenda a (µm) <span id="a_v">100</span></label>
+          <input id="a" type="range" min="10" max="1000" step="5" value="100"></div>
+        <div class="ctrl"><label>λ (nm) <span id="lam_v">650</span></label>
+          <input id="lam" type="range" min="405" max="700" step="1" value="650"></div>
+        <div class="legend">Intensidade <b>I ∝ (senβ/β)²</b>, <b>β = πa·senθ/λ</b>. Largura do máximo central ~ λL/a.</div>
+      </div>
+      <canvas id="cvD" width="1000" height="520"></canvas>
+    </div>
+  </section>
+</div>
+
+<script>
+const tabs=document.querySelectorAll('.tab');
+tabs.forEach(b=>b.addEventListener('click',()=>{
+  tabs.forEach(t=>t.classList.remove('active')); b.classList.add('active');
+  document.querySelectorAll('.panel').forEach(p=>p.style.display='none');
+  document.getElementById(b.dataset.tab).style.display='block';
+}));
+
+// Projeção
+const cvP=document.getElementById('cvP'), ctxP=cvP.getContext('2d');
+const L=document.getElementById('L'), s=document.getElementById('s'), h0=document.getElementById('h0');
+const L_v=document.getElementById('L_v'), s_v=document.getElementById('s_v'), h0_v=document.getElementById('h0_v');
+
+function drawP(){
+  const W=cvP.width, H=cvP.height;
+  const Lm=parseFloat(L.value), sm=parseFloat(s.value), h0cm=parseFloat(h0.value);
+  L_v.textContent=Lm.toFixed(2); s_v.textContent=sm.toFixed(2); h0_v.textContent=h0cm.toFixed(1);
+  const scaleX=(W-160)/6; const x0=80; const xLaser=x0; const xObj=x0+sm*scaleX; const xWall=x0+Lm*scaleX;
+  const h0m=h0cm/100; const M=Lm/sm; const hShadow=h0m*M; const k=H*0.35; const h0px=h0m*k; const hSpx=hShadow*k;
+
+  // fundo
+  const g=ctxP.createLinearGradient(0,0,W,0); g.addColorStop(0,'#0f1a2f'); g.addColorStop(1,'#0b1326'); ctxP.fillStyle=g; ctxP.fillRect(0,0,W,H);
+  // laser
+  ctxP.fillStyle='#ff6666'; ctxP.beginPath(); ctxP.arc(xLaser,H/2,6,0,Math.PI*2); ctxP.fill(); ctxP.fillStyle='#ffd1d1'; ctxP.font='12px ui-monospace'; ctxP.fillText('Laser', xLaser-14,H/2-10);
+  // objeto
+  ctxP.fillStyle='#5eead4'; ctxP.fillRect(xObj-3,H/2-h0px/2,6,h0px); ctxP.fillStyle='#b9fff2'; ctxP.fillText('Objeto', xObj-24,H/2-h0px/2-6);
+  // parede
+  ctxP.fillStyle='#93c5fd55'; ctxP.fillRect(xWall-4,40,8,H-80); ctxP.fillStyle='#cfe6ff'; ctxP.fillText('Parede', xWall-18,30);
+  // raios extremos
+  ctxP.strokeStyle='#84ccff'; ctxP.lineWidth=1.2; ctxP.beginPath();
+  ctxP.moveTo(xLaser,H/2-h0px/2); ctxP.lineTo(xWall,H/2-hSpx/2);
+  ctxP.moveTo(xLaser,H/2+h0px/2); ctxP.lineTo(xWall,H/2+hSpx/2); ctxP.stroke();
+  // sombra
+  ctxP.fillStyle='#1f2937'; ctxP.fillRect(xWall-5,H/2-hSpx/2,10,hSpx);
+}
+[L,s,h0].forEach(e=>e.addEventListener('input',drawP)); drawP();
+
+// Difração
+const cvD=document.getElementById('cvD'), ctxD=cvD.getContext('2d');
+const Ld=document.getElementById('Ld'), a=document.getElementById('a'), lam=document.getElementById('lam');
+const Ld_v=document.getElementById('Ld_v'), a_v=document.getElementById('a_v'), lam_v=document.getElementById('lam_v');
+
+function drawD(){
+  const W=cvD.width, H=cvD.height, half=H/2;
+  const Lm=parseFloat(Ld.value); Ld_v.textContent=Lm.toFixed(2);
+  const a_m=parseFloat(a.value)*1e-6; a_v.textContent=a.value;
+  const lam_m=parseFloat(lam.value)*1e-9; lam_v.textContent=lam.value;
+  const y1=lam_m*Lm/a_m; const Ymax=3.5*y1; const mpp=(2*Ymax)/H;
+
+  const img=ctxD.createImageData(W,H); const data=img.data;
+  for(let x=0;x<W;x++){
+    for(let y=0;y<H;y++){
+      const y_m=(y-half)*mpp; const theta=Math.atan2(y_m,Lm);
+      const beta=Math.PI*a_m*Math.sin(theta)/lam_m;
+      let I = (Math.abs(beta)<1e-6)?1:Math.pow(Math.sin(beta)/beta,2);
+      const v=Math.pow(Math.max(0,Math.min(1,I)),0.65); const g=Math.round(v*255);
+      const i=(y*W+x)*4; data[i]=g; data[i+1]=g; data[i+2]=g; data[i+3]=255;
+    }
+  }
+  ctxD.putImageData(img,0,0);
+  // curva
+  ctxD.strokeStyle='#4de3c4'; ctxD.lineWidth=2; ctxD.beginPath();
+  for(let y=0;y<H;y+=2){
+    const y_m=(y-half)*mpp; const theta=Math.atan2(y_m,Lm);
+    const beta=Math.PI*a_m*Math.sin(theta)/lam_m;
+    let I=(Math.abs(beta)<1e-6)?1:Math.pow(Math.sin(beta)/beta,2);
+    const xPlot=60+200*I; if(y===0) ctxD.moveTo(xPlot,y); else ctxD.lineTo(xPlot,y);
+  } ctxD.stroke();
+}
+[Ld,a,lam].forEach(e=>e.addEventListener('input',drawD)); drawD();
+</script>
+</body>
+</html>
