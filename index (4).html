@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Laser: Projeção x Difração — Simulação Interativa</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#111a2b; --muted:#a8b3c7; --text:#f2f6ff;
+    --accent:#66a3ff; --accent2:#4de3c4;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 800px at 10% -10%, #1a2440 0%, transparent 60%) no-repeat,
+                         radial-gradient(1200px 800px at 110% 10%, #11223a 0%, transparent 60%) no-repeat,
+                         var(--bg);
+       color:var(--text); font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Arial}
+  header{position:sticky;top:0;padding:14px 18px;background:rgba(8,12,24,.75);backdrop-filter:blur(10px);
+         border-bottom:1px solid rgba(255,255,255,.08);z-index:5}
+  h1{margin:0;font-size:clamp(18px,3vw,28px)}
+  .muted{color:var(--muted)}
+  .wrap{max-width:1200px;margin:18px auto;padding:0 18px}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 16px}
+  .tab{border:1px solid rgba(255,255,255,.12);background:linear-gradient(180deg,#15223a,#0e192c);
+       padding:10px 12px;border-radius:12px;cursor:pointer}
+  .tab.active{background:linear-gradient(180deg,var(--accent),#2a77ff);color:#001228;font-weight:800}
+  .panel{display:none;background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,.01));
+         border:1px solid rgba(255,255,255,.06);border-radius:16px;overflow:hidden}
+  .panel.active{display:block}
+  .grid{display:grid;grid-template-columns:320px 1fr;gap:12px}
+  .controls{background:rgba(18,26,42,.8);border-right:1px solid rgba(255,255,255,.06);padding:14px}
+  .controls h3{margin:.2rem 0 .6rem 0}
+  .ctrl{margin:10px 0}
+  .ctrl label{display:flex;justify-content:space-between;gap:10px}
+  input[type="range"]{width:100%}
+  .canvasWrap{position:relative;padding:10px}
+  canvas{width:100%;height:520px;background:#0c1426;border-bottom-left-radius:16px}
+  .legend{padding:10px 14px;color:var(--muted);font-size:14px;background:#0c1426}
+  .pill{display:inline-block;border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:4px 10px;margin:2px}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .eq{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      background:rgba(255,255,255,.06);padding:2px 6px;border-radius:8px}
+  footer{color:var(--muted);text-align:center;padding:16px}
+  @media (max-width:900px){ .grid{grid-template-columns:1fr} canvas{height:420px} }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Laser: por que algo pequeno “aumenta”? <span class="muted">Projeção × Difração</span></h1>
+  </header>
+  <div class="wrap">
+    <div class="tabs">
+      <button class="tab active" data-tab="proj">Projeção geométrica (sombra)</button>
+      <button class="tab" data-tab="difr">Difração (fenda única)</button>
+    </div>
+
+    <!-- PROJEÇÃO -->
+    <section id="proj" class="panel active">
+      <div class="grid">
+        <div class="controls">
+          <h3>Controles</h3>
+          <div class="ctrl">
+            <label>Distância até a parede L (m) <span><span id="L_val">2.0</span> m</span></label>
+            <input type="range" id="L" min="0.5" max="6" step="0.1" value="2">
+          </div>
+          <div class="ctrl">
+            <label>Distância do objeto ao laser s (m) <span><span id="s_val">0.10</span> m</span></label>
+            <input type="range" id="s" min="0.02" max="0.8" step="0.01" value="0.10">
+          </div>
+          <div class="ctrl">
+            <label>Altura do objeto h₀ (cm) <span><span id="h0_val">1.0</span> cm</span></label>
+            <input type="range" id="h0" min="0.2" max="5" step="0.1" value="1.0">
+          </div>
+          <div class="ctrl">
+            <label><input type="checkbox" id="animProj"> Animar L (parede vai e volta)</label>
+          </div>
+          <div class="ctrl muted">
+            Ampliação <span class="eq">M ≈ L / s</span>
+            <div class="row">
+              <span class="pill">M: <b id="M_val">20.0×</b></span>
+              <span class="pill">Sombra (h): <b id="h_val">20.0 cm</b></span>
+            </div>
+          </div>
+          <div class="muted" style="margin-top:10px">
+            Dica: quanto mais <b>perto do laser</b> (s pequeno) e mais <b>longe a parede</b> (L grande), maior a sombra.
+          </div>
+        </div>
+        <div class="canvasWrap">
+          <canvas id="cvProj" width="1000" height="520"></canvas>
+          <div class="legend">
+            <span class="pill">Laser (fonte pontual)</span>
+            <span class="pill">Objeto</span>
+            <span class="pill">Parede</span>
+            <span class="pill">Raios extremos determinam o tamanho da sombra</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DIFRAÇÃO -->
+    <section id="difr" class="panel">
+      <div class="grid">
+        <div class="controls">
+          <h3>Controles</h3>
+          <div class="ctrl">
+            <label>Distância L (m) <span><span id="Ld_val">2.0</span> m</span></label>
+            <input type="range" id="Ld" min="0.5" max="8" step="0.1" value="2">
+          </div>
+          <div class="ctrl">
+            <label>Largura da fenda a (µm) <span><span id="a_val">100</span> µm</span></label>
+            <input type="range" id="a" min="10" max="1000" step="5" value="100">
+          </div>
+          <div class="ctrl">
+            <label>Comprimento de onda λ (nm) <span><span id="lam_val">650</span> nm</span></label>
+            <input type="range" id="lam" min="405" max="700" step="1" value="650">
+          </div>
+          <div class="ctrl">
+            <label><input type="checkbox" id="animDifr"> Animar L (afasta/aproxima)</label>
+          </div>
+          <div class="ctrl muted">
+            Intensidade na tela: <span class="eq">I = I₀ (sinβ/β)²</span>, onde <span class="eq">β = π a sinθ / λ</span> e, para pequenos ângulos, <span class="eq">sinθ ≈ y/L</span>.
+            <div class="row" style="margin-top:6px">
+              <span class="pill">Máximo central mais largo quando a ↓</span>
+              <span class="pill">Padrão “estica” quando L ↑</span>
+            </div>
+          </div>
+        </div>
+        <div class="canvasWrap">
+          <canvas id="cvDifr" width="1000" height="520"></canvas>
+          <div class="legend">
+            <span class="pill">Mapa de intensidade (tons claros = maior I)</span>
+            <span class="pill">Curva I(y) no centro</span>
+            <span class="pill">Marcadores do máximo central</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel active" style="margin-top:14px; display:block">
+      <div class="legend">
+        <b>Explicação rápida</b>: Na <u>projeção</u>, a imagem cresce com a razão <span class="eq">M ≈ L/s</span>. Na <u>difração</u>,
+        objetos muito pequenos (fendas estreitas) espalham a luz coerente do laser, gerando em uma tela distante
+        um padrão grande. A largura do máximo central é aproximadamente proporcional a <span class="eq">λL/a</span> — ou seja,
+        <b>quanto menor a fenda</b> (<span class="eq">a</span>) e <b>maior a distância</b> (<span class="eq">L</span>), mais “aberto” fica o padrão.
+        <br>Use as abas acima, mexa nos controles e veja isso acontecer.
+      </div>
+    </section>
+
+    <footer>Segurança: não aponte laser para os olhos nem para superfícies refletoras. Use parede fosca. — © 2025</footer>
+  </div>
+
+<script>
+// ------- Tabs -------
+const tabs = document.querySelectorAll('.tab');
+const panels = document.querySelectorAll('.panel');
+tabs.forEach(tb => tb.addEventListener('click', () => {
+  tabs.forEach(t => t.classList.remove('active'));
+  panels.forEach(p => p.classList.remove('active'));
+  tb.classList.add('active');
+  document.getElementById(tb.dataset.tab).classList.add('active');
+}));
+
+// ------- Projeção -------
+const cvP = document.getElementById('cvProj');
+const ctxP = cvP.getContext('2d');
+const L_in = document.getElementById('L');
+const s_in = document.getElementById('s');
+const h0_in = document.getElementById('h0');
+const L_val = document.getElementById('L_val');
+const s_val = document.getElementById('s_val');
+const h0_val = document.getElementById('h0_val');
+const M_val = document.getElementById('M_val');
+const h_val = document.getElementById('h_val');
+const animProj = document.getElementById('animProj');
+
+let tProj = 0;
+
+function drawProjection(){
+  const W = cvP.width, H = cvP.height;
+  ctxP.clearRect(0,0,W,H);
+
+  // Escalas (metros para pixels)
+  const maxL = 6; // m
+  const x0 = 80; // posição do laser
+  const Lm = parseFloat(L_in.value);      // m
+  const sm = Math.max(0.02, parseFloat(s_in.value)); // m
+  const h0cm = parseFloat(h0_in.value);   // cm
+  const h0m = h0cm/100;
+
+  const scaleX = (W-160)/maxL;
+  const xLaser = x0;
+  const xObj = x0 + sm*scaleX;
+  const xWall = x0 + Lm*scaleX;
+
+  // Ampliação e sombra
+  const M = Lm/sm;
+  const hShadow = h0m*M; // m
+  const hShadow_px = hShadow * (H*0.35); // escala vertical fictícia para visual
+
+  // Fundo
+  const grad = ctxP.createLinearGradient(0,0,W,0);
+  grad.addColorStop(0,'#0f1a2f'); grad.addColorStop(1,'#0b1326');
+  ctxP.fillStyle = grad; ctxP.fillRect(0,0,W,H);
+
+  // Laser (ponto)
+  ctxP.fillStyle = '#ff5555';
+  ctxP.beginPath(); ctxP.arc(xLaser, H/2, 6, 0, Math.PI*2); ctxP.fill();
+  ctxP.font = '12px ui-monospace';
+  ctxP.fillStyle = '#ffd1d1'; ctxP.fillText('Laser', xLaser-14, H/2-10);
+
+  // Objeto (haste vertical h0)
+  const h0_px = h0m * (H*0.35);
+  ctxP.fillStyle = '#5eead4';
+  ctxP.fillRect(xObj-3, H/2 - h0_px/2, 6, h0_px);
+  ctxP.fillStyle = '#b9fff2'; ctxP.fillText('Objeto (h₀)', xObj-34, H/2 - h0_px/2 - 6);
+
+  // Parede
+  ctxP.fillStyle = '#93c5fd55';
+  ctxP.fillRect(xWall-4, 40, 8, H-80);
+  ctxP.fillStyle = '#cfe6ff'; ctxP.fillText('Parede', xWall-18, 30);
+
+  // Raios extremos (superior e inferior do objeto)
+  ctxP.strokeStyle = '#84ccff';
+  ctxP.lineWidth = 1.2;
+  ctxP.beginPath();
+  ctxP.moveTo(xLaser, H/2 - h0_px/2); ctxP.lineTo(xWall, H/2 - hShadow_px/2);
+  ctxP.moveTo(xLaser, H/2 + h0_px/2); ctxP.lineTo(xWall, H/2 + hShadow_px/2);
+  ctxP.stroke();
+
+  // Sombra na parede
+  ctxP.fillStyle = '#1f2937';
+  ctxP.fillRect(xWall-5, H/2 - hShadow_px/2, 10, hShadow_px);
+
+  // Medidas
+  ctxP.strokeStyle = '#94a3b8';
+  ctxP.setLineDash([6,6]);
+  // L
+  ctxP.beginPath(); ctxP.moveTo(xLaser, H-40); ctxP.lineTo(xWall, H-40); ctxP.stroke();
+  ctxP.setLineDash([]);
+  ctxP.fillStyle = '#cbd5e1'; ctxP.fillText('L', (xLaser+xWall)/2, H-44);
+  // s
+  ctxP.setLineDash([6,6]);
+  ctxP.beginPath(); ctxP.moveTo(xLaser, H-20); ctxP.lineTo(xObj, H-20); ctxP.stroke();
+  ctxP.setLineDash([]);
+  ctxP.fillText('s', (xLaser+xObj)/2, H-24);
+
+  // Atualiza labels
+  L_val.textContent = Lm.toFixed(2);
+  s_val.textContent = sm.toFixed(2);
+  h0_val.textContent = h0cm.toFixed(1);
+  M_val.textContent = M.toFixed(1)+'×';
+  h_val.textContent = (hShadow*100).toFixed(1)+' cm';
+}
+
+[L_in, s_in, h0_in].forEach(e => e.addEventListener('input', drawProjection));
+
+function tickProj(){
+  if(animProj.checked){
+    // oscilar L entre 0.7 e 5.5 m
+    tProj += 0.015;
+    const Lmid = 3.1, Amp = 2.4;
+    const Lval = Math.max(0.5, Math.min(6, Lmid + Amp*Math.sin(tProj)));
+    L_in.value = Lval.toFixed(2);
+    drawProjection();
+  }
+  requestAnimationFrame(tickProj);
+}
+drawProjection(); tickProj();
+
+// ------- Difração -------
+const cvD = document.getElementById('cvDifr');
+const ctxD = cvD.getContext('2d');
+const Ld = document.getElementById('Ld');
+const a = document.getElementById('a');
+const lam = document.getElementById('lam');
+const Ld_val = document.getElementById('Ld_val');
+const a_val = document.getElementById('a_val');
+const lam_val = document.getElementById('lam_val');
+const animDifr = document.getElementById('animDifr');
+let tDifr = 0;
+
+function drawDiffraction(){
+  const W = cvD.width, H = cvD.height;
+  ctxD.clearRect(0,0,W,H);
+
+  // Fundo
+  const grad = ctxD.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'#0f1a2f'); grad.addColorStop(1,'#0b1326');
+  ctxD.fillStyle = grad; ctxD.fillRect(0,0,W,H);
+
+  // Parâmetros (converter unidades)
+  const Lm = parseFloat(Ld.value);           // m
+  const a_um = parseFloat(a.value);          // micrômetros
+  const a_m = a_um * 1e-6;                   // m
+  const lam_nm = parseFloat(lam.value);      // nm
+  const lam_m = lam_nm * 1e-9;               // m
+
+  // Mapa de intensidade I(y) com aproximação sinθ ≈ y/L (pequenos ângulos)
+  const halfH = H/2;
+
+  // Estimativa do 1º mínimo: y1 ≈ λL/a
+  const y1 = lam_m * Lm / a_m; // metros
+  const Ymax = 3.5 * y1;
+  const m_per_px = (2*Ymax) / H;
+
+  const imageData = ctxD.createImageData(W, H);
+  const data = imageData.data;
+
+  for(let x=0; x<W; x++){
+    for(let y=0; y<H; y++){
+      const y_m = (y - halfH) * m_per_px;
+      const theta = Math.atan2(y_m, Lm);
+      const beta = Math.PI * a_m * Math.sin(theta) / lam_m;
+      let I;
+      if(Math.abs(beta) < 1e-6){ I = 1.0; }
+      else { I = Math.pow(Math.sin(beta)/beta, 2); }
+
+      const gamma = 0.65;
+      let v = Math.pow(I, gamma);
+      v = Math.max(0, Math.min(1, v));
+
+      const idx = (y*W + x)*4;
+      const g = Math.round(255*v);
+      data[idx+0] = g; data[idx+1] = g; data[idx+2] = g; data[idx+3] = 255;
+    }
+  }
+  ctxD.putImageData(imageData, 0, 0);
+
+  // Curva I(y) à esquerda
+  ctxD.strokeStyle = '#4de3c4'; ctxD.lineWidth = 2;
+  ctxD.beginPath();
+  for(let y=0; y<H; y+=2){
+    const y_m = (y - halfH) * m_per_px;
+    const theta = Math.atan2(y_m, Lm);
+    const beta = Math.PI * a_m * Math.sin(theta) / lam_m;
+    let I;
+    if(Math.abs(beta) < 1e-6){ I = 1.0; } else { I = Math.pow(Math.sin(beta)/beta, 2); }
+    const xPlot = 60 + 180*I;
+    const yPlot = y;
+    if(y===0) ctxD.moveTo(xPlot, yPlot);
+    else ctxD.lineTo(xPlot, yPlot);
+  }
+  ctxD.stroke();
+
+  // Marcadores do máximo central
+  const y1_px = y1 / m_per_px;
+  ctxD.strokeStyle = '#66a3ff'; ctxD.setLineDash([6,6]); ctxD.lineWidth = 1.5;
+  ctxD.beginPath();
+  ctxD.moveTo(0, halfH - y1_px); ctxD.lineTo(W, halfH - y1_px);
+  ctxD.moveTo(0, halfH + y1_px); ctxD.lineTo(W, halfH + y1_px);
+  ctxD.stroke(); ctxD.setLineDash([]);
+
+  // Labels
+  ctxD.fillStyle = '#cfe6ff'; ctxD.font = '12px ui-monospace';
+  ctxD.fillText('Máximo central', 12, halfH - y1_px - 6);
+  ctxD.fillText('Curva I(y)', 62, 20);
+
+  // Atualiza UI
+  Ld_val.textContent = Lm.toFixed(2);
+  a_val.textContent = a_um.toFixed(0);
+  lam_val.textContent = lam_nm.toFixed(0);
+}
+
+[Ld, a, lam].forEach(e => e.addEventListener('input', drawDiffraction));
+
+function tickDifr(){
+  if(animDifr.checked){
+    tDifr += 0.015;
+    const Lmid = 3.0, Amp = 2.5;
+    const Lval = Math.max(0.5, Math.min(8, Lmid + Amp*Math.sin(tDifr)));
+    Ld.value = Lval.toFixed(2);
+    drawDiffraction();
+  }
+  requestAnimationFrame(tickDifr);
+}
+drawDiffraction(); tickDifr();
+</script>
+</body>
+</html>
